@@ -1,0 +1,493 @@
+# Waveshare ESP32-S3-Relay-6CH
+#Supply Voltage	7~36V (or 5V/1A Type-C Interface)
+#Relay channels	6 CH
+#Contact form	1NO 1NC
+#Interface	Type-C
+#Communication Protocol	USB Protocol
+#Dimensions	88(H) x 122(V)mm
+
+#Onboard Interface
+#GPIO Control	Function	Description
+#GP0	BOOT Key	BOOT Key Control Pin
+#GP21	BUZZER	Buzzer Control Pin
+#GP38	RGB	RGB LED Control Pin
+#GP1	CH1	Relay No.1 Control Pin
+#GP2	CH2	Relay No.2 Control Pin
+#GP41	CH3	Relay No.3 Control Pin
+#GP42	CH4	Relay No.4 Control Pin
+#GP45	CH5	Relay No.5 Control Pin
+#GP46	CH6	Relay No.6 Control Pin
+#GP17	TXD	UART TX pin, converted to RS485
+#GP18	RXD	UART RX pin, converted to RS485
+
+#Buttons and LEDS
+#GP5  button 1   GP13 led
+#GP4  button 2   GP14 led
+#GP40 button 3   GP15 led
+#GP39 button 4   GP16 led
+
+
+
+substitutions:
+  name: esphome-web-3e8cfc
+  friendly_name: Waveshare Relay RS485
+  blueriiot_mac: !secret blueriiot_mac
+  blueriiot_name_prefix: !secret blueriiot_nameprefix
+  blueriiot_id_prefix: !secret blueriiot_idprefix
+
+  # send true 0x01 to this service ID
+  blueriiot_send_service_uuid: 'F3300001-F0A2-9B06-0C59-1BC4763B5C00'
+  blueriiot_send_characteristic_uuid: 'F3300002-F0A2-9B06-0C59-1BC4763B5C00'
+  
+  # notification is received on this Service ID                  
+  blueriiot_receive_service_uuid: 'F3300001-F0A2-9B06-0C59-1BC4763B5C00'
+  blueriiot_receive_characteristic_uuid: 'F3300003-F0A2-9B06-0C59-1BC4763B5C00'
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  name_add_mac_suffix: false
+  platformio_options:
+    board_build.flash_mode: dio
+  project:
+    name: esphome.web
+    version: '1.0'
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: arduino
+
+external_components:
+  - source: github://Schluggi/esphome@bsec2
+    components:
+      - bme680_bsec
+
+# external_components:
+#   - source: github://szewcson/esphome@bsec2_bme68x
+#     components: [ bme68x_bsec ]
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+
+# Allow Over-The-Air updates
+ota:
+
+# Allow provisioning Wi-Fi via serial
+improv_serial:
+
+wifi:
+  # Set up a wifi access point
+  ap: {}
+
+# In combination with the `ap` this allows the user
+# to provision wifi credentials to the device via WiFi AP.
+captive_portal:
+
+dashboard_import:
+  package_import_url: github://esphome/firmware/esphome-web/esp32s3.yaml@v2
+  import_full_config: true
+
+# Sets up Bluetooth LE (Only on ESP32) to allow the user
+# to provision wifi credentials to the device.
+esp32_improv:
+  authorizer: none
+
+# To have a "next url" for improv serial
+web_server:
+
+esp32_ble_tracker:
+
+# i2c:
+#   - id: "i2cbus_bme"
+#     sda: GPIO10
+#     scl: GPIO6
+#     scan: true  
+
+ble_client:
+  - mac_address: ${blueriiot_mac}
+    id: ble_client_${blueriiot_id_prefix}
+    on_connect: 
+      then:
+        - lambda: "id(binary_sensor_${blueriiot_id_prefix}_connected).publish_state(true);"
+        - delay: 2s
+        - button.press: button_${blueriiot_id_prefix}_doreading
+    on_disconnect: [lambda: "id(binary_sensor_${blueriiot_id_prefix}_connected).publish_state(false);"]
+
+    
+binary_sensor:
+  - platform: gpio
+    pin: 
+      number: GPIO5
+      mode:
+        input: true
+        pulldown: true
+    filters:
+      - delayed_on: 100ms
+      - delayed_off: 100ms
+    name: "Zwembadpomp on/off"
+  - platform: gpio
+    pin: 
+      number: GPIO4
+      mode:
+        input: true
+        pulldown: true
+    filters:
+      - delayed_on: 100ms
+      - delayed_off: 100ms
+    name: "Zwembadpomp low speed"
+  - platform: gpio
+    pin: 
+      number: GPIO40
+      mode:
+        input: true
+        pulldown: true
+    filters:
+      - delayed_on: 100ms
+      - delayed_off: 100ms
+    name: "Zwembadpomp med speed"
+  - platform: gpio
+    pin: 
+      number: GPIO39
+      mode:
+        input: true
+        pulldown: true
+    filters:
+      - delayed_on: 100ms
+      - delayed_off: 100ms
+    name: "Zwembadpomp high speed"      
+
+## Blue Connect    
+  - platform: template
+    id: binary_sensor_${blueriiot_id_prefix}_connected
+    name: ${blueriiot_name_prefix} Status
+    device_class: connectivity
+    entity_category: diagnostic
+
+#Switches and relays
+switch:
+  - platform: gpio
+    pin: GPIO1   #D7
+    name: "Relay 1" 
+    id: RL1
+  - platform: gpio 
+    pin: GPIO2  #D6
+    name: "Relay 2"
+    id: RL2
+  - platform: gpio 
+    pin: GPIO41  #D5
+    name: "Relay 3" 
+    id: RL3
+  - platform: gpio
+    pin: GPIO42   #D7
+    name: "Relay 4" 
+    id: RL4
+  - platform: gpio 
+    pin: GPIO45  #D6
+    name: "Relay 5"
+    id: RL5
+  - platform: gpio 
+    pin: GPIO46  #D5
+    name: "Relay6" 
+    id: RL6  
+  - platform: template
+    name: "switch_buzzer"
+    optimistic: true
+    turn_on_action:
+      - output.turn_on: buzzer
+        #in here we set the frequency, but first we had to turn the buzzer on as stated in https://esphome.io/components/output/ledc
+      - output.ledc.set_frequency:
+          id: buzzer
+          frequency: "2441Hz"
+      - output.set_level:
+          id: buzzer
+          level: "75%"
+    turn_off_action:
+      - output.turn_off: buzzer
+  - platform: ble_client
+    ble_client_id: ble_client_${blueriiot_id_prefix}
+    name: "${blueriiot_name_prefix} Enable"
+    id: switch_${blueriiot_id_prefix}_enable    
+
+# Outputs
+output:
+  - platform: ledc
+    pin: GPIO21
+    id: buzzer
+  - platform: gpio
+    pin: GPIO13
+    id: lb1
+  - platform: gpio
+    pin: GPIO14
+    id: lb2
+  - platform: gpio
+    pin: GPIO15
+    id: lb3
+  - platform: gpio
+    pin: GPIO16
+    id: lb4      
+
+
+
+# uart:
+#   id: modbus_uart
+#   tx_pin: GPIO17
+#   rx_pin: GPIO18
+#   baud_rate: 1200
+#   stop_bits: 1
+#   data_bits: 8
+#   parity: NONE 
+#   debug:
+#     after:
+#       delimiter: "\n" 
+
+# modbus:
+#   #flow_control_pin: GPIOXX
+#   send_wait_time: 500ms
+#   id: mod_bus_iSaver
+#   uart_id: modbus_uart
+#   disable_crc: True
+
+# modbus_controller:
+#   - id: controller_iSaver
+#     ## the Modbus device addr
+#     address: 0x1
+#     modbus_id: mod_bus_iSaver
+#     command_throttle: 500ms
+#     setup_priority: -10
+#     update_interval: 10s
+
+# - platform: modbus_controller
+#     modbus_controller_id: modbusDevice
+#     name: "Test Modbus"
+#     id: test_modbus
+#     custom_command: [ 0xAA, 0xC3, 0x07, 0xD1, 0x0, 0x0] #MSB first
+#     value_type: S_WORD
+#     register_count: 1
+#     force_new_range: true
+#     response_size: 9
+#     lambda: |-
+#       ESP_LOGV("Modbus Sensor Lambda","Got new data" );
+#       union {
+#         float float_value;
+#         uint16_t raw;
+#       } raw_to_float;
+#       if (data.size() < 4 ) {
+#         ESP_LOGE("Modbus Sensor Lambda", "invalid data size %d",data.size());
+#         return NAN;
+#       }
+#       raw_to_float.raw =   data[6] << 8 | data[7];
+#       ESP_LOGV("Modbus Sensor Lambda", "FP32 = 0x%08X => %f", raw_to_float.raw, raw_to_float.float_value);
+#       return raw_to_float.raw;
+      
+# Text sensors with general information
+# text_sensor:
+#   - platform: version
+#     name: $hostname ESPHome Version
+#   - platform: wifi_info
+#     ip_address:
+#       name: $hostname IP Address
+#     ssid:
+#       name: $hostname WiFi
+#     bssid:
+#       name: $hostname MAC
+
+
+
+# bme68x_bsec:
+#   state_save_interval: 30min
+#   bsec_configuration: 0,0,4,2,189,1,0,0,0,0,0,0,158,7,0,0,176,0,1,0,0,192,168,71,64,49,119,76,0,0,97,69,0,0,97,69,137,65,0,63,0,0,0,63,0,0,64,63,205,204,204,62,10,0,3,0,0,0,96,64,23,183,209,56,0,0,0,0,0,0,0,0,0,0,0,0,205,204,204,189,0,0,0,0,0,0,0,0,0,0,128,63,0,0,0,0,0,0,128,63,0,0,0,0,0,0,0,0,0,0,128,63,0,0,0,0,0,0,128,63,0,0,0,0,0,0,0,0,0,0,128,63,0,0,0,0,0,0,128,63,82,73,157,188,95,41,203,61,118,224,108,63,155,230,125,63,191,14,124,63,0,0,160,65,0,0,32,66,0,0,160,65,0,0,32,66,0,0,32,66,0,0,160,65,0,0,32,66,0,0,160,65,8,0,2,0,236,81,133,66,16,0,3,0,10,215,163,60,10,215,35,59,10,215,35,59,13,0,5,0,0,0,0,0,100,35,41,29,86,88,0,9,0,229,208,34,62,0,0,0,0,0,0,0,0,218,27,156,62,225,11,67,64,0,0,160,64,0,0,0,0,0,0,0,0,94,75,72,189,93,254,159,64,66,62,160,191,0,0,0,0,0,0,0,0,33,31,180,190,138,176,97,64,65,241,99,190,0,0,0,0,0,0,0,0,167,121,71,61,165,189,41,192,184,30,189,64,12,0,10,0,0,0,0,0,0,0,0,0,13,5,11,0,1,2,2,207,61,208,65,149,110,24,66,180,108,177,65,219,148,13,192,70,132,58,66,163,58,140,192,12,99,178,192,185,59,255,193,178,213,175,63,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,110,211,55,195,237,6,56,67,0,0,0,0,0,0,0,0,26,3,255,63,61,246,7,192,171,201,228,192,249,144,215,63,237,199,104,193,128,158,216,64,117,140,155,63,137,120,129,67,108,109,253,191,0,0,0,0,81,64,57,68,103,241,231,64,109,29,152,192,209,43,193,63,93,54,30,65,197,46,92,64,128,27,224,192,6,20,144,191,56,179,130,64,0,0,0,0,43,156,59,196,33,217,100,194,104,77,72,65,15,103,175,191,249,252,12,193,63,117,253,192,233,5,141,65,155,42,25,64,13,88,249,191,0,0,0,0,48,141,122,190,204,150,44,192,36,162,29,193,96,59,39,189,54,202,48,65,151,205,68,64,79,105,55,193,53,120,53,192,77,211,32,192,0,0,0,0,193,207,92,65,239,201,76,65,208,70,82,66,81,63,96,65,48,179,0,194,251,96,242,193,176,51,96,194,153,114,98,66,144,247,64,65,0,0,0,0,219,179,180,63,175,218,119,191,51,71,207,191,245,145,129,63,53,16,244,65,138,208,117,65,138,97,36,66,228,15,32,195,126,91,103,191,0,0,0,0,26,151,170,193,64,105,49,193,46,223,189,193,129,203,168,193,40,91,49,66,4,87,107,65,205,202,37,65,244,36,154,66,240,85,39,193,0,0,0,0,166,96,87,192,114,7,68,191,233,32,214,63,84,249,40,192,45,78,132,64,145,33,253,61,49,43,187,192,244,32,77,67,224,250,71,191,0,0,0,0,103,75,214,190,206,141,252,63,99,15,178,65,80,79,166,190,214,25,146,192,165,29,24,194,18,228,219,193,113,246,235,194,49,115,232,63,0,0,0,0,17,211,124,64,56,252,251,62,25,118,148,193,168,234,94,64,131,157,82,64,217,119,236,65,120,245,240,65,17,69,168,195,49,51,8,63,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,131,217,97,66,182,104,101,194,0,0,0,0,0,0,0,0,6,142,142,195,229,54,143,67,0,0,0,0,0,0,0,0,25,224,153,66,217,51,154,194,0,0,0,0,0,0,0,0,142,36,105,194,199,63,110,66,0,0,0,0,0,0,0,0,206,73,250,193,138,69,249,65,0,0,0,0,0,0,0,0,123,173,127,66,20,116,128,194,0,0,0,0,0,0,0,0,49,65,49,64,205,213,107,192,0,0,0,0,0,0,0,0,189,250,179,194,164,98,180,66,0,0,0,0,0,0,0,0,96,182,197,67,155,71,197,195,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,9,0,2,185,28,179,73,64,25,141,76,223,26,138,76,222,207,133,76,87,134,164,75,23,127,159,75,166,9,155,75,94,120,170,73,95,221,177,73,93,44,182,73,0,0,0,0,0,0,0,0,0,0,0,0,30,55,120,73,215,98,32,76,7,79,34,76,161,238,36,76,119,151,160,75,119,96,157,75,202,75,154,75,118,89,111,73,133,239,116,73,219,140,120,73,0,0,128,63,0,0,128,63,0,0,128,63,0,0,0,88,1,254,0,2,1,5,48,117,100,0,44,1,112,23,151,7,132,3,197,0,92,4,144,1,64,1,64,1,144,1,48,117,48,117,48,117,48,117,100,0,100,0,100,0,48,117,48,117,48,117,100,0,100,0,48,117,48,117,8,7,8,7,8,7,8,7,8,7,100,0,100,0,100,0,100,0,48,117,48,117,48,117,100,0,100,0,100,0,48,117,48,117,100,0,100,0,255,255,255,255,255,255,255,255,255,255,44,1,44,1,44,1,44,1,44,1,44,1,44,1,44,1,44,1,44,1,44,1,44,1,44,1,44,1,255,255,255,255,255,255,255,255,255,255,112,23,112,23,112,23,112,23,8,7,8,7,8,7,8,7,112,23,112,23,112,23,112,23,112,23,112,23,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,112,23,112,23,112,23,112,23,255,255,255,255,220,5,220,5,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,220,5,220,5,220,5,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,44,1,0,5,10,5,0,2,0,10,0,30,0,5,0,5,0,5,0,5,0,5,0,5,0,64,1,100,0,100,0,100,0,200,0,200,0,200,0,64,1,64,1,64,1,10,1,0,0,0,0,233,74,0,0
+#   i2c_id: "i2cbus_bme"
+#   address: 0x77  
+  
+
+#Status Led
+light:
+ - platform: neopixelbus
+   name: "RGB Light"
+   pin: GPIO38
+   type: RGB
+   variant: WS2812x
+   num_leds: 1
+   id: rgb1
+   method:
+    type: esp32_rmt
+    channel: 0
+ - platform: binary
+   name: "Led button 1"
+   output: lb1
+ - platform: binary
+   name: "Led button 2"
+   output: lb2
+ - platform: binary
+   name: "Led button 3"
+   output: lb3
+ - platform: binary
+   name: "Led button 4"
+   output: lb4
+    
+sensor:
+  - platform: template 
+    id: sensor_${blueriiot_id_prefix}_temperature
+    name: ${blueriiot_name_prefix} Temperature
+    # Optional variables:
+    unit_of_measurement: "°C"
+    icon: "mdi:water-percent"
+    device_class: "temperature"
+    state_class: "measurement"
+    accuracy_decimals: 1
+  
+  - platform: template 
+    id: sensor_${blueriiot_id_prefix}_ph
+    name: ${blueriiot_name_prefix} PH
+    # Optional variables:
+    #unit_of_measurement: "°C"
+    #icon: "mdi:water-percent"
+    #device_class: "temperature"
+    state_class: "measurement"
+    accuracy_decimals: 1
+
+  - platform: template 
+    id: sensor_${blueriiot_id_prefix}_orp
+    name: ${blueriiot_name_prefix} Chloor
+    # Optional variables:
+    #unit_of_measurement: "°C"
+    #icon: "mdi:water-percent"
+    device_class: "voltage"
+    state_class: "measurement"
+    accuracy_decimals: 1
+    
+  - platform: template 
+    id: sensor_${blueriiot_id_prefix}_bat
+    name: ${blueriiot_name_prefix} Battery
+    # Optional variables:
+    unit_of_measurement: "°C"
+    #icon: "mdi:water-percent"
+    device_class: "temperature"
+    state_class: "measurement"
+    accuracy_decimals: 1
+    
+  - platform: template 
+    id: sensor_${blueriiot_id_prefix}_salt
+    name: ${blueriiot_name_prefix} Salt
+    # Optional variables:
+    unit_of_measurement: "g/L"
+    icon: "mdi:water-percent"
+    state_class: "measurement"
+    accuracy_decimals: 1
+    
+  - platform: template 
+    id: sensor_${blueriiot_id_prefix}_cond
+    name: ${blueriiot_name_prefix} Conductivity
+    # Optional variables:
+    unit_of_measurement: "mS/cm"
+    #icon: "mdi:water-percent"
+    state_class: "measurement"
+    accuracy_decimals: 1
+  # Sensors for the BME680 device
+  - platform: bme68x_bsec
+    temperature:
+      name: "BME680 Temperature"
+      filters:
+        - median
+    pressure:
+      name: "BME680 Pressure"
+      filters:
+        - median
+    humidity:
+      name: "BME680 Humidity"
+      filters:
+        - median
+    iaq:
+      name: "BME680 IAQ"
+      filters:
+        - median
+    iaq_static:
+      name: "BME680 Static IAQ"
+      filters:
+        - median
+    co2_equivalent:
+      name: "BME680 CO2 Equivalent"
+      filters:
+        - median
+    breath_voc_equivalent:
+      name: "BME680 Breath VOC Equivalent"
+      filters:
+        - median
+    gas_resistance:
+      # Gas resistance in Ω
+      name: "BME680 Gas Resistance"
+      filters:
+        - median
+  
+    
+##
+## Blue Connect
+button:
+  - platform: template
+    id: button_${blueriiot_id_prefix}_doreading
+    name: ${blueriiot_name_prefix} do reading
+    internal: true
+    on_press:
+      then:
+        - ble_client.ble_write:
+            id: ble_client_${blueriiot_id_prefix}
+            service_uuid: ${blueriiot_send_service_uuid}
+            characteristic_uuid: ${blueriiot_send_characteristic_uuid}
+            value: !lambda |-
+              return {0x01};
+
+text_sensor:
+  - platform: ble_client
+    id: ${blueriiot_id_prefix}_reading_data
+    name: ${blueriiot_name_prefix} reading data
+    internal: true
+    ble_client_id: ble_client_${blueriiot_id_prefix}
+    service_uuid: ${blueriiot_receive_service_uuid}
+    characteristic_uuid: ${blueriiot_receive_characteristic_uuid}
+    notify: true
+    update_interval: never
+    on_notify:
+      then:
+       lambda: |-
+          std::string rawhex = format_hex_pretty((uint8_t *) x.c_str(), x.size()).c_str();
+          ESP_LOGD("raw_hex", "%s", rawhex.c_str());
+
+          float temperature = (float)((int16_t)(x[2]<< 8) + x[1])/100;
+          ESP_LOGD("temp", "%f", temperature);
+          id(sensor_${blueriiot_id_prefix}_temperature).publish_state(temperature);
+              
+          float raw_ph = (float)( (int16_t) (x[4]<< 8) + x[3]) ;
+          float ph = (float)( (int16_t) (2048 - raw_ph)) / 232  + 7 ; 
+          ESP_LOGD("ph", "%f", ph);
+          id(sensor_${blueriiot_id_prefix}_ph).publish_state(ph);
+          
+          float orp = (float)( (int16_t) (x[6]<< 8) + x[5]) / 3.86  - 21.57826;
+          ESP_LOGD("orp", "%f", orp);
+          id(sensor_${blueriiot_id_prefix}_orp).publish_state(orp);
+          
+          float salt = (float)( (int16_t) (x[8]<< 8) + x[7]) / 25.0;
+          ESP_LOGD("salt", "%f", salt);
+          id(sensor_${blueriiot_id_prefix}_salt).publish_state(salt);
+          
+          float cond = (float)( (int16_t) (x[10]<< 8) + x[9]) / 0.4134;
+          ESP_LOGD("cond", "%f", cond);
+          id(sensor_${blueriiot_id_prefix}_cond).publish_state(cond);
+          
+          float bat = (float)( (int16_t) x[11]);
+          ESP_LOGD("bat", "%f", bat);
+          id(sensor_${blueriiot_id_prefix}_bat).publish_state(bat);
+          
+          
+          
+          id(switch_${blueriiot_id_prefix}_enable).turn_off(); 
+  - platform: ble_scanner
+    name: "BLE Devices Scanner" 
+  # Text sensor for the internal BME680 device
+  - platform: bme68x_bsec
+    iaq_accuracy: 
+      # IAQ accuracy as a text value of Stabilizing, Uncertain, Calibrating, Calibrated
+      name: "BME680 IAQ Accuracy"
